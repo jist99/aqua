@@ -32,7 +32,9 @@ struct OpStack {
 
 impl OpStack {
     fn new() -> OpStack {
-        OpStack {stack: Vec::<Operand>::new()}
+        OpStack {
+            stack: Vec::<Operand>::new(),
+        }
     }
 
     fn push(&mut self, op: Operand) {
@@ -77,20 +79,53 @@ impl OpStack {
         self.stack.push(Operand::Int(i2 - i));
     }
 
+    fn mul(&mut self) {
+        //Int Int
+        let i = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Mul only implemented for int"),
+        };
+
+        let i2 = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Mul only implemented for int"),
+        };
+
+        self.stack.push(Operand::Int(i * i2));
+    }
+
+    fn div(&mut self) {
+        //Int Int
+        let i = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Mul only implemented for int"),
+        };
+
+        let i2 = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Mul only implemented for int"),
+        };
+
+        self.stack.push(Operand::Int(i2 / i));
+    }
+
     fn print(&mut self) {
-        println!("{:?}", self.stack[self.stack.len()-1]);
+        println!("{:?}", self.stack[self.stack.len() - 1]);
     }
 }
 
 //Lexer
 struct Lexer {
-    chars: Vec<char>, 
+    chars: Vec<char>,
     current: usize,
 }
 
 impl Lexer {
     fn new(file: String) -> Lexer {
-        let mut l = Lexer {chars: Vec::<char>::new(), current: 0};
+        let mut l = Lexer {
+            chars: Vec::<char>::new(),
+            current: 0,
+        };
         l.chars = file.chars().collect();
         l
     }
@@ -107,20 +142,30 @@ impl Lexer {
                 c if c.is_ascii_digit() => {
                     out = Some(Op::Operand(Operand::Int(self.read_num())));
                     break 'a;
-                },
+                }
                 '+' => {
                     self.current += 1;
                     out = Some(Op::Operator(Operator::Add));
                     break 'a;
-                },
+                }
                 '-' => {
                     self.current += 1;
                     out = Some(Op::Operator(Operator::Sub));
                     break 'a;
-                },
+                }
                 '.' => {
                     self.current += 1;
                     out = Some(Op::Operator(Operator::Print));
+                    break 'a;
+                }
+                '*' => {
+                    self.current += 1;
+                    out = Some(Op::Operator(Operator::Mul));
+                    break 'a;
+                }
+                '/' => {
+                    self.current += 1;
+                    out = Some(Op::Operator(Operator::Div));
                     break 'a;
                 }
                 c if c.is_ascii_whitespace() => self.current += 1,
@@ -142,7 +187,6 @@ impl Lexer {
     }
 }
 
-
 fn main() {
     let mut file = std::fs::File::open("J:\\_programming\\Rust\\teal\\test.tl").unwrap();
     let mut data = String::new();
@@ -154,19 +198,19 @@ fn main() {
     'a: loop {
         let op = match lex.next() {
             Some(v) => v,
-            None => break 'a
+            None => break 'a,
         };
 
         match op {
             Op::Operand(o) => stack.push(o),
-            Op::Operator(o) => {
-                match o {
-                    Operator::Add => stack.add(),
-                    Operator::Sub => stack.sub(),
-                    Operator::Print => stack.print(),
-                    _ => panic!("WIP"),
-                }
-            }
+            Op::Operator(o) => match o {
+                Operator::Add => stack.add(),
+                Operator::Sub => stack.sub(),
+                Operator::Print => stack.print(),
+                Operator::Mul => stack.mul(),
+                Operator::Div => stack.div(),
+                _ => panic!("WIP"),
+            },
         }
     }
 }
