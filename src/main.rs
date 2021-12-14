@@ -16,11 +16,19 @@ enum Operator {
     Equal,
     LessThan,
     GreaterThan,
+    Cond,
+}
+
+#[derive(PartialEq)]
+enum Glyph {
+    OpenSquiggle,
+    CloseSquiggle,
 }
 
 enum Op {
     Operand(Operand),
     Operator(Operator),
+    Glyph(Glyph),
 }
 
 //Operation stack
@@ -148,6 +156,37 @@ impl OpStack {
         };
     }
 
+    fn cond(&mut self, lex: &mut Lexer) {
+        match self.pop() {
+            Operand::Bool(v) => {
+                //on false, skip to end
+                let mut skips = 0;
+                if !v {
+                    loop {
+                        let next = lex.next();
+                        let op = match next {
+                            None => panic!("Conditional has no closing brace!"),
+                            Some(v) => v,
+                        };
+
+                        if let Op::Glyph(g) = op {
+                            if g == Glyph::OpenSquiggle {
+                                skips += 1;
+                            } else if g == Glyph::CloseSquiggle {
+                                if skips == 1 {
+                                    return;
+                                } else {
+                                    skips -= 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => panic!("Conditional requires Bool at top of stack!"),
+        }
+    }
+
     fn print(&mut self) {
         println!("{:?}", self.stack[self.stack.len() - 1]);
     }
@@ -169,21 +208,22 @@ impl Lexer {
         l
     }
 
-    //i know this is stupid but the match wasnt letting me return
-    //on only some of the branches, so this is my workaround...
     fn next(&mut self) -> Option<Op> {
         loop {
-            self.current += 1;
+            self.current += 1; //TODO: fix so that a space before the program is not needed
             if self.current >= self.chars.len() {
                 return None;
             }
 
             let c = self.chars[self.current];
-            
+
             match c {
+                //Operands
                 c if c.is_ascii_digit() => return Some(Op::Operand(Operand::Int(self.read_num()))),
                 _c if self.is_str("true") => return Some(Op::Operand(Operand::Bool(true))),
                 _c if self.is_str("false") => return Some(Op::Operand(Operand::Bool(false))),
+
+                //Operators
                 _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
                 '<' => return Some(Op::Operator(Operator::LessThan)),
                 '>' => return Some(Op::Operator(Operator::GreaterThan)),
@@ -192,6 +232,13 @@ impl Lexer {
                 '.' => return Some(Op::Operator(Operator::Print)),
                 '*' => return Some(Op::Operator(Operator::Mul)),
                 '/' => return Some(Op::Operator(Operator::Div)),
+                '?' => return Some(Op::Operator(Operator::Cond)),
+
+                //Glyphs
+                '{' => return Some(Op::Glyph(Glyph::OpenSquiggle)),
+                '}' => return Some(Op::Glyph(Glyph::CloseSquiggle)),
+
+                //Misc
                 c if c.is_ascii_whitespace() => (),
                 _ => panic!("Unrecognised token {}", c),
             };
@@ -244,6 +291,7 @@ fn main() {
         };
 
         match op {
+            Op::Glyph(_) => (),
             Op::Operand(o) => stack.push(o),
             Op::Operator(o) => match o {
                 Operator::Add => stack.add(),
@@ -254,6 +302,7 @@ fn main() {
                 Operator::Equal => stack.equal(),
                 Operator::LessThan => stack.less_than(),
                 Operator::GreaterThan => stack.greater_than(),
+                Operator::Cond => stack.cond(&mut lex),
                 _ => panic!("WIP"),
             },
         }
