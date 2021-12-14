@@ -4,12 +4,7 @@ use std::io::Read;
 #[derive(Debug)] //Temp for printing
 enum Operand {
     Int(i32),
-}
-
-impl Operand {
-    fn type_match(&self, other: &Operand) -> bool {
-        std::mem::discriminant(self) == std::mem::discriminant(other)
-    }
+    Bool(bool),
 }
 
 enum Operator {
@@ -18,6 +13,9 @@ enum Operator {
     Mul,
     Div,
     Print,
+    Equal,
+    LessThan,
+    GreaterThan,
 }
 
 enum Op {
@@ -61,7 +59,7 @@ impl OpStack {
             _ => panic!("Add only implemented for int"),
         };
 
-        self.stack.push(Operand::Int(i + i2));
+        self.push(Operand::Int(i + i2));
     }
 
     fn sub(&mut self) {
@@ -76,7 +74,7 @@ impl OpStack {
             _ => panic!("Sub only implemented for int"),
         };
 
-        self.stack.push(Operand::Int(i2 - i));
+        self.push(Operand::Int(i2 - i));
     }
 
     fn mul(&mut self) {
@@ -91,7 +89,7 @@ impl OpStack {
             _ => panic!("Mul only implemented for int"),
         };
 
-        self.stack.push(Operand::Int(i * i2));
+        self.push(Operand::Int(i * i2));
     }
 
     fn div(&mut self) {
@@ -106,7 +104,52 @@ impl OpStack {
             _ => panic!("Mul only implemented for int"),
         };
 
-        self.stack.push(Operand::Int(i2 / i));
+        self.push(Operand::Int(i2 / i));
+    }
+
+    fn equal(&mut self) {
+        //Int Int || Bool Bool
+        match self.pop() {
+            Operand::Int(i) => match self.pop() {
+                Operand::Int(i2) => {
+                    self.push(Operand::Bool(i == i2));
+                }
+                _ => panic!("Can only compare Int with Int!"),
+            },
+
+            Operand::Bool(v) => match self.pop() {
+                Operand::Bool(v2) => {
+                    self.push(Operand::Bool(v == v2));
+                }
+                _ => panic!("Can only compare Bool with Bool!"),
+            },
+        }
+    }
+
+    fn less_than(&mut self) {
+        //Int Int
+        let i = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Can only compare Ints!"),
+        };
+
+        match self.pop() {
+            Operand::Int(v) => self.push(Operand::Bool(v < i)),
+            _ => panic!("Can only compare Ints!"),
+        };
+    }
+
+    fn greater_than(&mut self) {
+        //Int Int
+        let i = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Can only compare Ints!"),
+        };
+
+        match self.pop() {
+            Operand::Int(v) => self.push(Operand::Bool(v > i)),
+            _ => panic!("Can only compare Ints!"),
+        };
     }
 
     fn print(&mut self) {
@@ -143,6 +186,28 @@ impl Lexer {
                     out = Some(Op::Operand(Operand::Int(self.read_num())));
                     break 'a;
                 }
+                _c if self.is_str("true") => {
+                    out = Some(Op::Operand(Operand::Bool(true)));
+                    break 'a;
+                }
+                _c if self.is_str("false") => {
+                    out = Some(Op::Operand(Operand::Bool(false)));
+                    break 'a;
+                }
+                _c if self.is_str("==") => {
+                    out = Some(Op::Operator(Operator::Equal));
+                    break 'a;
+                }
+                '<' => {
+                    self.current += 1;
+                    out = Some(Op::Operator(Operator::LessThan));
+                    break 'a;
+                }
+                '>' => {
+                    self.current += 1;
+                    out = Some(Op::Operator(Operator::GreaterThan));
+                    break 'a;
+                }
                 '+' => {
                     self.current += 1;
                     out = Some(Op::Operator(Operator::Add));
@@ -169,7 +234,7 @@ impl Lexer {
                     break 'a;
                 }
                 c if c.is_ascii_whitespace() => self.current += 1,
-                _ => panic!("Unrecognised token!"),
+                _ => panic!("Unrecognised token {}", c),
             };
         }
 
@@ -184,6 +249,25 @@ impl Lexer {
         }
 
         num.parse().unwrap()
+    }
+
+    fn is_str(&mut self, s: &str) -> bool {
+        let mut temp = 0usize;
+        let s: Vec<char> = s.chars().collect();
+
+        for i in self.current..self.chars.len() {
+            if self.chars[i] != s[temp] {
+                return false;
+            }
+            temp += 1;
+
+            if temp >= s.len() {
+                break;
+            }
+        }
+
+        self.current += temp;
+        true
     }
 }
 
@@ -209,8 +293,13 @@ fn main() {
                 Operator::Print => stack.print(),
                 Operator::Mul => stack.mul(),
                 Operator::Div => stack.div(),
+                Operator::Equal => stack.equal(),
+                Operator::LessThan => stack.less_than(),
+                Operator::GreaterThan => stack.greater_than(),
                 _ => panic!("WIP"),
             },
         }
+
+        //println!("{:?}", stack.stack);
     }
 }
