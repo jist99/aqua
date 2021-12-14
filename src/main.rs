@@ -111,16 +111,12 @@ impl OpStack {
         //Int Int || Bool Bool
         match self.pop() {
             Operand::Int(i) => match self.pop() {
-                Operand::Int(i2) => {
-                    self.push(Operand::Bool(i == i2));
-                }
+                Operand::Int(i2) => self.push(Operand::Bool(i == i2)),
                 _ => panic!("Can only compare Int with Int!"),
             },
 
             Operand::Bool(v) => match self.pop() {
-                Operand::Bool(v2) => {
-                    self.push(Operand::Bool(v == v2));
-                }
+                Operand::Bool(v2) => self.push(Operand::Bool(v == v2)),
                 _ => panic!("Can only compare Bool with Bool!"),
             },
         }
@@ -176,69 +172,30 @@ impl Lexer {
     //i know this is stupid but the match wasnt letting me return
     //on only some of the branches, so this is my workaround...
     fn next(&mut self) -> Option<Op> {
-        let mut out = None;
+        loop {
+            self.current += 1;
+            if self.current >= self.chars.len() {
+                return None;
+            }
 
-        'a: while self.current < self.chars.len() {
             let c = self.chars[self.current];
-
+            
             match c {
-                c if c.is_ascii_digit() => {
-                    out = Some(Op::Operand(Operand::Int(self.read_num())));
-                    break 'a;
-                }
-                _c if self.is_str("true") => {
-                    out = Some(Op::Operand(Operand::Bool(true)));
-                    break 'a;
-                }
-                _c if self.is_str("false") => {
-                    out = Some(Op::Operand(Operand::Bool(false)));
-                    break 'a;
-                }
-                _c if self.is_str("==") => {
-                    out = Some(Op::Operator(Operator::Equal));
-                    break 'a;
-                }
-                '<' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::LessThan));
-                    break 'a;
-                }
-                '>' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::GreaterThan));
-                    break 'a;
-                }
-                '+' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::Add));
-                    break 'a;
-                }
-                '-' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::Sub));
-                    break 'a;
-                }
-                '.' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::Print));
-                    break 'a;
-                }
-                '*' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::Mul));
-                    break 'a;
-                }
-                '/' => {
-                    self.current += 1;
-                    out = Some(Op::Operator(Operator::Div));
-                    break 'a;
-                }
-                c if c.is_ascii_whitespace() => self.current += 1,
+                c if c.is_ascii_digit() => return Some(Op::Operand(Operand::Int(self.read_num()))),
+                _c if self.is_str("true") => return Some(Op::Operand(Operand::Bool(true))),
+                _c if self.is_str("false") => return Some(Op::Operand(Operand::Bool(false))),
+                _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
+                '<' => return Some(Op::Operator(Operator::LessThan)),
+                '>' => return Some(Op::Operator(Operator::GreaterThan)),
+                '+' => return Some(Op::Operator(Operator::Add)),
+                '-' => return Some(Op::Operator(Operator::Sub)),
+                '.' => return Some(Op::Operator(Operator::Print)),
+                '*' => return Some(Op::Operator(Operator::Mul)),
+                '/' => return Some(Op::Operator(Operator::Div)),
+                c if c.is_ascii_whitespace() => (),
                 _ => panic!("Unrecognised token {}", c),
             };
         }
-
-        out
     }
 
     fn read_num(&mut self) -> i32 {
@@ -248,6 +205,7 @@ impl Lexer {
             self.current += 1;
         }
 
+        self.current -= 1;
         num.parse().unwrap()
     }
 
@@ -266,7 +224,7 @@ impl Lexer {
             }
         }
 
-        self.current += temp;
+        self.current += temp - 1;
         true
     }
 }
