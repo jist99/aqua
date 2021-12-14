@@ -14,6 +14,7 @@ enum Operator {
     Div,
     Print,
     Equal,
+    NotEqual,
     LessThan,
     GreaterThan,
     Cond,
@@ -130,6 +131,21 @@ impl OpStack {
         }
     }
 
+    fn not_equal(&mut self) {
+        //Int Int || Bool Bool
+        match self.pop() {
+            Operand::Int(i) => match self.pop() {
+                Operand::Int(i2) => self.push(Operand::Bool(i != i2)),
+                _ => panic!("Can only compare Int with Int!"),
+            },
+
+            Operand::Bool(v) => match self.pop() {
+                Operand::Bool(v2) => self.push(Operand::Bool(v != v2)),
+                _ => panic!("Can only compare Bool with Bool!"),
+            },
+        }
+    }
+
     fn less_than(&mut self) {
         //Int Int
         let i = match self.pop() {
@@ -218,6 +234,9 @@ impl Lexer {
             let c = self.chars[self.current];
 
             match c {
+                //Comment
+                _c if self.is_str("//") => self.comment(),
+
                 //Operands
                 c if c.is_ascii_digit() => return Some(Op::Operand(Operand::Int(self.read_num()))),
                 _c if self.is_str("true") => return Some(Op::Operand(Operand::Bool(true))),
@@ -225,6 +244,7 @@ impl Lexer {
 
                 //Operators
                 _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
+                _c if self.is_str("!=") => return Some(Op::Operator(Operator::NotEqual)),
                 '<' => return Some(Op::Operator(Operator::LessThan)),
                 '>' => return Some(Op::Operator(Operator::GreaterThan)),
                 '+' => return Some(Op::Operator(Operator::Add)),
@@ -274,6 +294,20 @@ impl Lexer {
         self.current += temp - 1;
         true
     }
+
+    fn comment(&mut self) {
+        loop {
+            if self.current >= self.chars.len() {
+                return;
+            }
+
+            let c = self.chars[self.current];
+            if c == '\n' {
+                return;
+            }
+            self.current += 1;
+        }
+    }
 }
 
 fn main() {
@@ -300,6 +334,7 @@ fn main() {
                 Operator::Mul => stack.mul(),
                 Operator::Div => stack.div(),
                 Operator::Equal => stack.equal(),
+                Operator::NotEqual => stack.not_equal(),
                 Operator::LessThan => stack.less_than(),
                 Operator::GreaterThan => stack.greater_than(),
                 Operator::Cond => stack.cond(&mut lex),
