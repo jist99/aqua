@@ -204,13 +204,11 @@ impl OpStack {
     }
 
     fn print(&mut self) {
-        /*if self.stack.is_empty() {
+        if self.stack.is_empty() {
             println!("_");
         } else {
             println!("{:?}", self.stack[self.stack.len() - 1]);
-        }*/
-
-        println!("{:?}", self.stack);
+        }
     }
 }
 
@@ -392,7 +390,7 @@ fn main() {
                         _ => (),
                     };
                 }
-                Glyph::Break => {
+                Glyph::Break => { //Can probably be improved, instead of jumping to the top of the scope and exiting, instead use the already tracked brackets to get out
                     let mut found = false;
 
                     for i in (0..loop_stack.len()).rev() {
@@ -421,7 +419,7 @@ fn main() {
                 }
                 _ => (),
             },
-            Op::Operand(o) => {println!("operand.");stack.push(o)},
+            Op::Operand(o) => stack.push(o),
             Op::Operator(o) => match o {
                 Operator::Add => stack.add(),
                 Operator::Sub => stack.sub(),
