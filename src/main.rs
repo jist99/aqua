@@ -204,7 +204,11 @@ impl OpStack {
     }
 
     fn print(&mut self) {
-        println!("{:?}", self.stack[self.stack.len() - 1]);
+        if self.stack.is_empty() {
+            println!("_");
+        } else {
+            println!("{:?}", self.stack[self.stack.len() - 1]);
+        }
     }
 }
 
@@ -366,20 +370,20 @@ fn main() {
                     } else {
                         loop_stack.push(Brace::Open);
                     }
-                },
+                }
                 Glyph::CloseSquiggle => {
-                    if loop_stack.len() <= 0 {
+                    if loop_stack.is_empty() {
                         panic!("Unmatched braces!");
                     }
 
-                    match loop_stack[loop_stack.len()-1] {
+                    match loop_stack[loop_stack.len() - 1] {
                         Brace::Open => {
                             loop_stack.pop();
-                        },
+                        }
                         Brace::OpenFor(pos) => lex.current = pos,
                         _ => (),
                     };
-                },
+                }
                 Glyph::Break => {
                     let mut found = false;
 
@@ -388,12 +392,12 @@ fn main() {
                         match brace {
                             Brace::Open => {
                                 loop_stack.pop();
-                            },
+                            }
                             Brace::OpenFor(pos) => {
                                 lex.current = *pos - 1;
                                 lex.exit_body();
                                 found = true;
-                            },
+                            }
                         };
                     }
 
