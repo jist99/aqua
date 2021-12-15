@@ -1,5 +1,12 @@
 use std::io::Read;
 
+//Enums - misc
+#[derive(Debug)]
+enum Brace {
+    Open,
+    OpenFor(usize),
+}
+
 //Enums - Op
 #[derive(Debug)] //Temp for printing
 enum Operand {
@@ -26,6 +33,8 @@ enum Operator {
 enum Glyph {
     OpenSquiggle,
     CloseSquiggle,
+    Loop,
+    Break,
 }
 
 enum Op {
@@ -250,6 +259,8 @@ impl Lexer {
                 //Glyphs
                 '{' => return Some(Op::Glyph(Glyph::OpenSquiggle)),
                 '}' => return Some(Op::Glyph(Glyph::CloseSquiggle)),
+                '~' => return Some(Op::Glyph(Glyph::Loop)),
+                '$' => return Some(Op::Glyph(Glyph::Break)),
 
                 //Misc
                 c if c.is_ascii_whitespace() => (),
@@ -331,8 +342,13 @@ fn main() {
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
 
+    //Main structures
     let mut lex = Lexer::new(data);
     let mut stack = OpStack::new();
+
+    //Sub structures
+    let mut to_open = false;
+    let mut loop_stack = Vec::<Brace>::new();
 
     'a: loop {
         let op = match lex.next() {
@@ -341,7 +357,52 @@ fn main() {
         };
 
         match op {
-            Op::Glyph(_) => (),
+            Op::Glyph(g) => match g {
+                Glyph::Loop => to_open = true,
+                Glyph::OpenSquiggle => {
+                    if to_open {
+                        loop_stack.push(Brace::OpenFor(lex.current));
+                        to_open = false;
+                    } else {
+                        loop_stack.push(Brace::Open);
+                    }
+                },
+                Glyph::CloseSquiggle => {
+                    if loop_stack.len() <= 0 {
+                        panic!("Unmatched braces!");
+                    }
+
+                    match loop_stack[loop_stack.len()-1] {
+                        Brace::Open => {
+                            loop_stack.pop();
+                        },
+                        Brace::OpenFor(pos) => lex.current = pos,
+                        _ => (),
+                    };
+                },
+                Glyph::Break => {
+                    let mut found = false;
+
+                    for i in (0..loop_stack.len()).rev() {
+                        let brace = &loop_stack[i];
+                        match brace {
+                            Brace::Open => {
+                                loop_stack.pop();
+                            },
+                            Brace::OpenFor(pos) => {
+                                lex.current = *pos - 1;
+                                lex.exit_body();
+                                found = true;
+                            },
+                        };
+                    }
+
+                    if !found {
+                        panic!("Can only break from a loop!");
+                    }
+                }
+                _ => (),
+            },
             Op::Operand(o) => stack.push(o),
             Op::Operator(o) => match o {
                 Operator::Add => stack.add(),
