@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::env;
 
 //Enums - misc
 #[derive(Debug)]
@@ -345,7 +346,9 @@ impl Lexer {
 }
 
 fn main() {
-    let mut file = std::fs::File::open("J:\\_programming\\Rust\\teal\\test.tl").unwrap();
+    //accept filename from terminal
+    let args: Vec<String> = env::args().collect();
+    let mut file = std::fs::File::open(&args[1]).unwrap();
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
 
