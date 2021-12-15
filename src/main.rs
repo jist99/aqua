@@ -204,11 +204,13 @@ impl OpStack {
     }
 
     fn print(&mut self) {
-        if self.stack.is_empty() {
+        /*if self.stack.is_empty() {
             println!("_");
         } else {
             println!("{:?}", self.stack[self.stack.len() - 1]);
-        }
+        }*/
+
+        println!("{:?}", self.stack);
     }
 }
 
@@ -236,6 +238,9 @@ impl Lexer {
             }
 
             let c = self.chars[self.current];
+            /*if !c.is_ascii_whitespace(){
+                println!("{}", c);
+            }*/
 
             match c {
                 //Comment
@@ -361,6 +366,8 @@ fn main() {
         };
 
         match op {
+            //Dealing with loops, ensuring that when the latter bracket of a loop is reached, we actually loop
+            //Requires a stack to keep track of which brackets are for what, etc
             Op::Glyph(g) => match g {
                 Glyph::Loop => to_open = true,
                 Glyph::OpenSquiggle => {
@@ -380,6 +387,7 @@ fn main() {
                         Brace::Open => {
                             loop_stack.pop();
                         }
+                        //If we're closing a loop, loop
                         Brace::OpenFor(pos) => lex.current = pos,
                         _ => (),
                     };
@@ -388,26 +396,32 @@ fn main() {
                     let mut found = false;
 
                     for i in (0..loop_stack.len()).rev() {
-                        let brace = &loop_stack[i];
+                        let brace = &mut loop_stack[i];
                         match brace {
                             Brace::Open => {
                                 loop_stack.pop();
                             }
                             Brace::OpenFor(pos) => {
+                                //Current should be pos-1 because pos is the bracket,
+                                //so we must go before that for exit_body() to work correctly
                                 lex.current = *pos - 1;
                                 lex.exit_body();
+
                                 found = true;
+                                break;
                             }
                         };
                     }
 
                     if !found {
                         panic!("Can only break from a loop!");
+                    } else {
+                        loop_stack.pop();
                     }
                 }
                 _ => (),
             },
-            Op::Operand(o) => stack.push(o),
+            Op::Operand(o) => {println!("operand.");stack.push(o)},
             Op::Operator(o) => match o {
                 Operator::Add => stack.add(),
                 Operator::Sub => stack.sub(),
