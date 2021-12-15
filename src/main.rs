@@ -18,6 +18,8 @@ enum Operator {
     LessThan,
     GreaterThan,
     Cond,
+    Pop,
+    Clear,
 }
 
 #[derive(PartialEq)]
@@ -56,6 +58,14 @@ impl OpStack {
     }
 
     //Operations
+    fn silent_pop(&mut self) {
+        self.pop();
+    }
+
+    fn clear(&mut self) {
+        self.stack.clear();
+    }
+
     fn add(&mut self) {
         //Int Int
         let i = match self.pop() {
@@ -176,27 +186,8 @@ impl OpStack {
         match self.pop() {
             Operand::Bool(v) => {
                 //on false, skip to end
-                let mut skips = 0;
                 if !v {
-                    loop {
-                        let next = lex.next();
-                        let op = match next {
-                            None => panic!("Conditional has no closing brace!"),
-                            Some(v) => v,
-                        };
-
-                        if let Op::Glyph(g) = op {
-                            if g == Glyph::OpenSquiggle {
-                                skips += 1;
-                            } else if g == Glyph::CloseSquiggle {
-                                if skips == 1 {
-                                    return;
-                                } else {
-                                    skips -= 1;
-                                }
-                            }
-                        }
-                    }
+                    lex.exit_body();
                 }
             }
             _ => panic!("Conditional requires Bool at top of stack!"),
@@ -253,6 +244,8 @@ impl Lexer {
                 '*' => return Some(Op::Operator(Operator::Mul)),
                 '/' => return Some(Op::Operator(Operator::Div)),
                 '?' => return Some(Op::Operator(Operator::Cond)),
+                ',' => return Some(Op::Operator(Operator::Pop)),
+                ';' => return Some(Op::Operator(Operator::Clear)),
 
                 //Glyphs
                 '{' => return Some(Op::Glyph(Glyph::OpenSquiggle)),
@@ -308,6 +301,29 @@ impl Lexer {
             self.current += 1;
         }
     }
+
+    fn exit_body(&mut self) {
+        let mut skips = 0;
+        loop {
+            let next = self.next();
+            let op = match next {
+                None => panic!("Missing closing brace!"),
+                Some(v) => v,
+            };
+
+            if let Op::Glyph(g) = op {
+                if g == Glyph::OpenSquiggle {
+                    skips += 1;
+                } else if g == Glyph::CloseSquiggle {
+                    if skips == 1 {
+                        return;
+                    } else {
+                        skips -= 1;
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn main() {
@@ -338,6 +354,8 @@ fn main() {
                 Operator::LessThan => stack.less_than(),
                 Operator::GreaterThan => stack.greater_than(),
                 Operator::Cond => stack.cond(&mut lex),
+                Operator::Pop => stack.silent_pop(),
+                Operator::Clear => stack.clear(),
                 _ => panic!("WIP"),
             },
         }
