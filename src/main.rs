@@ -1,5 +1,6 @@
 use std::collections::hash_map::HashMap;
 use std::env;
+use std::fmt;
 use std::io::Read;
 
 //Enums - misc
@@ -10,12 +11,21 @@ enum Brace {
 }
 
 //Enums - Op
-#[derive(Debug)] //Temp for printing
 #[derive(Clone)]
 enum Operand {
     Int(i32),
     Bool(bool),
     String(String),
+}
+
+impl fmt::Display for Operand {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Operand::Int(i) => write!(f, "{}", i),
+            Operand::Bool(b) => write!(f, "{}", b),
+            Operand::String(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 enum Operator {
@@ -225,7 +235,7 @@ impl OpStack {
         if self.stack.is_empty() {
             println!("_");
         } else {
-            println!("{:?}", self.stack[self.stack.len() - 1]);
+            println!("{}", self.stack[self.stack.len() - 1]);
         }
     }
 
