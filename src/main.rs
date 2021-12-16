@@ -15,6 +15,7 @@ enum Brace {
 enum Operand {
     Int(i32),
     Bool(bool),
+    String(String),
 }
 
 enum Operator {
@@ -80,19 +81,27 @@ impl OpStack {
         self.stack.clear();
     }
 
+    //TODO: Some better way of checking types on operations, this is ugly
     fn add(&mut self) {
         //Int Int
-        let i = match self.pop() {
-            Operand::Int(v) => v,
-            _ => panic!("Add only implemented for int"),
+        match self.pop() {
+            Operand::Int(v) => match self.pop() {
+                Operand::Int(v2) => self.push(Operand::Int(v + v2)),
+                Operand::String(v2) => self.push(Operand::String(v2 + &v.to_string())),
+                _ => panic!("Add only implemented for Int and String"),
+            },
+            Operand::String(v) => match self.pop() {
+                Operand::Int(v2) => self.push(Operand::String(v2.to_string() + &v)),
+                Operand::String(v2) => self.push(Operand::String(v2 + &v)),
+                Operand::Bool(v2) => self.push(Operand::String(v2.to_string() + &v)),
+                _ => panic!("Add only implemented for Int and String"),
+            },
+            Operand::Bool(v) => match self.pop() {
+                Operand::String(v2) => self.push(Operand::String(v2 + &v.to_string())),
+                _ => panic!("Can only append Bools to Strings!"),
+            },
+            _ => panic!("Add only implemented for Int and String"),
         };
-
-        let i2 = match self.pop() {
-            Operand::Int(v) => v,
-            _ => panic!("Add only implemented for int"),
-        };
-
-        self.push(Operand::Int(i + i2));
     }
 
     fn sub(&mut self) {
@@ -152,6 +161,8 @@ impl OpStack {
                 Operand::Bool(v2) => self.push(Operand::Bool(v == v2)),
                 _ => panic!("Can only compare Bool with Bool!"),
             },
+
+            _ => panic!("Can only compare Ints and Bools!"),
         }
     }
 
@@ -167,6 +178,8 @@ impl OpStack {
                 Operand::Bool(v2) => self.push(Operand::Bool(v != v2)),
                 _ => panic!("Can only compare Bool with Bool!"),
             },
+
+            _ => panic!("Can only compare Ints and Bools!"),
         }
     }
 
@@ -282,6 +295,7 @@ impl Lexer {
                 c if c.is_ascii_digit() => return Some(Op::Operand(Operand::Int(self.read_num()))),
                 _c if self.is_str("true") => return Some(Op::Operand(Operand::Bool(true))),
                 _c if self.is_str("false") => return Some(Op::Operand(Operand::Bool(false))),
+                '"' | '\'' => return Some(Op::Operand(Operand::String(self.read_str()))),
 
                 //Operators
                 _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
@@ -325,6 +339,20 @@ impl Lexer {
 
         self.current -= 1;
         num.parse().unwrap()
+    }
+
+    fn read_str(&mut self) -> String {
+        let mut str = String::new();
+        self.current += 1;
+        let mut c = self.chars[self.current];
+
+        while self.current < self.chars.len() && c != '"' && c != '\'' {
+            str.push(c);
+            self.current += 1;
+            c = self.chars[self.current];
+        }
+
+        str
     }
 
     fn is_str(&mut self, s: &str) -> bool {
@@ -407,6 +435,9 @@ fn main() {
     let mut file = std::fs::File::open(&args[1]).unwrap();
     let mut data = String::new();
     file.read_to_string(&mut data).unwrap();
+
+    //append newline to start of data - to make lexing easier
+    let data = "\n".to_string() + &data;
 
     //Main structures
     let mut lex = Lexer::new(data);
