@@ -172,6 +172,11 @@ impl OpStack {
                 _ => panic!("Can only compare Bool with Bool!"),
             },
 
+            Operand::String(v) => match self.pop() {
+                Operand::String(v2) => self.push(Operand::Bool(v == v2)),
+                _ => panic!("Can only compare String with String!"),
+            },
+
             _ => panic!("Can only compare Ints and Bools!"),
         }
     }
@@ -187,6 +192,11 @@ impl OpStack {
             Operand::Bool(v) => match self.pop() {
                 Operand::Bool(v2) => self.push(Operand::Bool(v != v2)),
                 _ => panic!("Can only compare Bool with Bool!"),
+            },
+
+            Operand::String(v) => match self.pop() {
+                Operand::String(v2) => self.push(Operand::Bool(v != v2)),
+                _ => panic!("Can only compare String with String!"),
             },
 
             _ => panic!("Can only compare Ints and Bools!"),
