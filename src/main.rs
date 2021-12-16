@@ -1,5 +1,6 @@
-use std::io::Read;
+use std::collections::hash_map::HashMap;
 use std::env;
+use std::io::Read;
 
 //Enums - misc
 #[derive(Debug)]
@@ -10,6 +11,7 @@ enum Brace {
 
 //Enums - Op
 #[derive(Debug)] //Temp for printing
+#[derive(Clone)]
 enum Operand {
     Int(i32),
     Bool(bool),
@@ -28,6 +30,8 @@ enum Operator {
     Cond,
     Pop,
     Clear,
+    Assign(String),
+    Access(String),
 }
 
 #[derive(PartialEq)]
@@ -211,6 +215,35 @@ impl OpStack {
             println!("{:?}", self.stack[self.stack.len() - 1]);
         }
     }
+
+    fn assign(&mut self, var_store: &mut VarStore, name: String) {
+        if self.stack.is_empty() {
+            panic!("Cannot assign from empty stack!");
+        }
+
+        let val = self.pop();
+        var_store.vars.insert(name, val);
+    }
+
+    fn access(&mut self, var_store: &mut VarStore, name: String) {
+        match var_store.vars.get(&name) {
+            Some(v) => self.push((*v).clone()),
+            None => panic!("Variable {} not found!", name),
+        }
+    }
+}
+
+//Variable storage
+struct VarStore {
+    vars: HashMap<String, Operand>,
+}
+
+impl VarStore {
+    fn new() -> VarStore {
+        VarStore {
+            vars: HashMap::<String, Operand>::new(),
+        }
+    }
 }
 
 //Lexer
@@ -263,12 +296,18 @@ impl Lexer {
                 '?' => return Some(Op::Operator(Operator::Cond)),
                 ',' => return Some(Op::Operator(Operator::Pop)),
                 ';' => return Some(Op::Operator(Operator::Clear)),
+                '=' => return Some(Op::Operator(Operator::Assign(self.read_until_space(1)))),
 
                 //Glyphs
                 '{' => return Some(Op::Glyph(Glyph::OpenSquiggle)),
                 '}' => return Some(Op::Glyph(Glyph::CloseSquiggle)),
                 '~' => return Some(Op::Glyph(Glyph::Loop)),
                 '$' => return Some(Op::Glyph(Glyph::Break)),
+
+                //Variable access
+                c if c.is_ascii_alphabetic() => {
+                    return Some(Op::Operator(Operator::Access(self.read_until_space(0))))
+                }
 
                 //Misc
                 c if c.is_ascii_whitespace() => (),
@@ -321,6 +360,23 @@ impl Lexer {
         }
     }
 
+    fn read_until_space(&mut self, offset: usize) -> String {
+        self.current += offset;
+        let mut s = String::new();
+        loop {
+            if self.current >= self.chars.len() {
+                return s;
+            }
+
+            let c = self.chars[self.current];
+            if c.is_ascii_whitespace() {
+                return s;
+            }
+            s.push(c);
+            self.current += 1;
+        }
+    }
+
     fn exit_body(&mut self) {
         let mut skips = 0;
         loop {
@@ -355,6 +411,7 @@ fn main() {
     //Main structures
     let mut lex = Lexer::new(data);
     let mut stack = OpStack::new();
+    let mut var_store = VarStore::new();
 
     //Sub structures
     let mut to_open = false;
@@ -393,7 +450,8 @@ fn main() {
                         _ => (),
                     };
                 }
-                Glyph::Break => { //Can probably be improved, instead of jumping to the top of the scope and exiting, instead use the already tracked brackets to get out
+                Glyph::Break => {
+                    //Can probably be improved, instead of jumping to the top of the scope and exiting, instead use the already tracked brackets to get out
                     let mut found = false;
 
                     for i in (0..loop_stack.len()).rev() {
@@ -436,6 +494,8 @@ fn main() {
                 Operator::Cond => stack.cond(&mut lex),
                 Operator::Pop => stack.silent_pop(),
                 Operator::Clear => stack.clear(),
+                Operator::Access(s) => stack.access(&mut var_store, s),
+                Operator::Assign(s) => stack.assign(&mut var_store, s),
                 _ => panic!("WIP"),
             },
         }
