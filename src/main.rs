@@ -386,13 +386,20 @@ impl Lexer {
         str
     }
 
-    fn seek(&mut self, op: Op) {
+    fn seek(&mut self, op: Op, err: String) {
         let mut old = self.current;
-        while self.current < self.chars.len() && self.next().unwrap() != op {
+        loop {
+            match self.next() {
+                Some(o) => {
+                    if o == op {
+                        self.current = old;
+                        return;
+                    }
+                }
+                None => panic!("{}", err),
+            }
             old = self.current;
         }
-
-        self.current = old;
     }
 
     fn is_str(&mut self, s: &str) -> bool {
@@ -551,7 +558,7 @@ fn main() {
                 }
                 //Skip over else's in normal code
                 Glyph::Else => {
-                    lex.seek(Op::Glyph(Glyph::OpenSquiggle));
+                    lex.seek(Op::Glyph(Glyph::OpenSquiggle), "Missing braces after else!".to_string());
                     lex.exit_body();
                 }
                 _ => (),
