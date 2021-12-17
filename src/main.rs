@@ -12,6 +12,7 @@ enum Brace {
 
 //Enums - Op
 #[derive(Clone)]
+#[derive(PartialEq)]
 enum Operand {
     Int(i32),
     Bool(bool),
@@ -28,6 +29,7 @@ impl fmt::Display for Operand {
     }
 }
 
+#[derive(PartialEq)]
 enum Operator {
     Add,
     Sub,
@@ -51,8 +53,10 @@ enum Glyph {
     CloseSquiggle,
     Loop,
     Break,
+    Else,
 }
 
+#[derive(PartialEq)]
 enum Op {
     Operand(Operand),
     Operator(Operator),
@@ -235,6 +239,12 @@ impl OpStack {
                 //on false, skip to end
                 if !v {
                     lex.exit_body();
+                    //If the next token is an else, execute it
+                    let old_pos = lex.current;
+                    match lex.next() {
+                        Some(Op::Glyph(Glyph::Else)) => (),
+                        _ => lex.current = old_pos,
+                    }
                 }
             }
             _ => panic!("Conditional requires Bool at top of stack!"),
@@ -337,6 +347,7 @@ impl Lexer {
                 '}' => return Some(Op::Glyph(Glyph::CloseSquiggle)),
                 '~' => return Some(Op::Glyph(Glyph::Loop)),
                 '$' => return Some(Op::Glyph(Glyph::Break)),
+                ':' => return Some(Op::Glyph(Glyph::Else)),
 
                 //Variable access
                 c if c.is_ascii_alphabetic() => {
@@ -373,6 +384,15 @@ impl Lexer {
         }
 
         str
+    }
+
+    fn seek(&mut self, op: Op) {
+        let mut old = self.current;
+        while self.current < self.chars.len() && self.next().unwrap() != op {
+            old = self.current;
+        }
+
+        self.current = old;
     }
 
     fn is_str(&mut self, s: &str) -> bool {
@@ -528,6 +548,11 @@ fn main() {
                     } else {
                         loop_stack.pop();
                     }
+                }
+                //Skip over else's in normal code
+                Glyph::Else => {
+                    lex.seek(Op::Glyph(Glyph::OpenSquiggle));
+                    lex.exit_body();
                 }
                 _ => (),
             },
