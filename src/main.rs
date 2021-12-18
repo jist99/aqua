@@ -11,8 +11,7 @@ enum Brace {
 }
 
 //Enums - Op
-#[derive(Clone)]
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 enum Operand {
     Int(i32),
     Bool(bool),
@@ -45,6 +44,7 @@ enum Operator {
     Clear,
     Assign(String),
     Access(String),
+    Index,
 }
 
 #[derive(PartialEq)]
@@ -54,7 +54,6 @@ enum Glyph {
     Loop,
     Break,
     Else,
-    Index(usize),
 }
 
 #[derive(PartialEq)]
@@ -241,11 +240,8 @@ impl OpStack {
                 if !v {
                     lex.exit_body();
                     //If the next token is an else, execute it
-                    match lex.peek() {
-                        Some(Op::Glyph(Glyph::Else)) => {
-                            lex.next();
-                        }
-                        _ => (),
+                    if let Some(Op::Glyph(Glyph::Else)) = lex.peek() {
+                        lex.next();
                     }
                 }
             }
@@ -272,22 +268,23 @@ impl OpStack {
 
     fn access(&mut self, var_store: &mut VarStore, lex: &mut Lexer, name: String) {
         match var_store.vars.get(&name) {
-            Some(v) => {
-                match lex.peek() {
-                    Some(Op::Glyph(Glyph::Index(i))) => {
-                        match v {
-                            Operand::String(s) => { 
-                                self.push(Operand::String(s.chars().nth(i).unwrap().to_string()));
-                                lex.next();
-                            },
-                            _ => panic!("Can only index Strings!"),
-                        }
-                    }
-                    _ => self.push((*v).clone()),
-                }
-            },
+            Some(v) => self.push((*v).clone()),
             None => panic!("Variable {} not found!", name),
         }
+    }
+
+    fn get_index(&mut self, var_store: &mut VarStore) {
+        let index = match self.pop() {
+            Operand::Int(v) => v,
+            _ => panic!("Index must be an Int!"),
+        };
+
+        match self.pop() {
+            Operand::String(v) => {
+                self.push(Operand::String(v.chars().nth(index as usize).unwrap().to_string()));
+            },
+            _ => panic!("Can only index Strings!"),
+        };
     }
 }
 
@@ -345,6 +342,7 @@ impl Lexer {
                 //Operators
                 _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
                 _c if self.is_str("!=") => return Some(Op::Operator(Operator::NotEqual)),
+                _c if self.is_str("[]")  => return Some(Op::Operator(Operator::Index)),
                 '<' => return Some(Op::Operator(Operator::LessThan)),
                 '>' => return Some(Op::Operator(Operator::GreaterThan)),
                 '+' => return Some(Op::Operator(Operator::Add)),
@@ -363,7 +361,6 @@ impl Lexer {
                 '~' => return Some(Op::Glyph(Glyph::Loop)),
                 '$' => return Some(Op::Glyph(Glyph::Break)),
                 ':' => return Some(Op::Glyph(Glyph::Else)),
-                '[' => return Some(Op::Glyph(Glyph::Index(self.read_index()))),
 
                 //Variable access
                 c if c.is_ascii_alphabetic() => {
@@ -393,22 +390,6 @@ impl Lexer {
 
         self.current -= 1;
         num.parse().unwrap()
-    }
-
-    fn read_index(&mut self) -> usize {
-        let mut num = String::new();
-        let mut c = self.chars[self.current];
-
-        while self.current < self.chars.len() && c != ']' {
-            num.push(self.chars[self.current]);
-            self.current += 1;
-            c = self.chars[self.current];
-        }
-
-        match num.parse() {
-            Ok(n) => n,
-            Err(_) => panic!("Invalid index!"),
-        }
     }
 
     fn read_str(&mut self) -> String {
@@ -483,7 +464,8 @@ impl Lexer {
             }
 
             let c = self.chars[self.current];
-            if c.is_ascii_whitespace() {
+            if c.is_ascii_whitespace() || c == '[' {
+                self.current -= 1;
                 return s;
             }
             s.push(c);
@@ -597,10 +579,12 @@ fn main() {
                 }
                 //Skip over else's in normal code
                 Glyph::Else => {
-                    lex.seek(Op::Glyph(Glyph::OpenSquiggle), "Missing braces after else!".to_string());
+                    lex.seek(
+                        Op::Glyph(Glyph::OpenSquiggle),
+                        "Missing braces after else!".to_string(),
+                    );
                     lex.exit_body();
                 }
-                Glyph::Index(_) => panic!("Can only index variables!"),
                 _ => (),
             },
             Op::Operand(o) => stack.push(o),
@@ -619,6 +603,7 @@ fn main() {
                 Operator::Clear => stack.clear(),
                 Operator::Access(s) => stack.access(&mut var_store, &mut lex, s),
                 Operator::Assign(s) => stack.assign(&mut var_store, s),
+                Operator::Index => stack.get_index(&mut var_store),
                 _ => panic!("WIP"),
             },
         }
