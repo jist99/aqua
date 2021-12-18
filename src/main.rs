@@ -54,6 +54,7 @@ enum Glyph {
     Loop,
     Break,
     Else,
+    Index(usize),
 }
 
 #[derive(PartialEq)]
@@ -240,10 +241,11 @@ impl OpStack {
                 if !v {
                     lex.exit_body();
                     //If the next token is an else, execute it
-                    let old_pos = lex.current;
-                    match lex.next() {
-                        Some(Op::Glyph(Glyph::Else)) => (),
-                        _ => lex.current = old_pos,
+                    match lex.peek() {
+                        Some(Op::Glyph(Glyph::Else)) => {
+                            lex.next();
+                        }
+                        _ => (),
                     }
                 }
             }
@@ -268,9 +270,22 @@ impl OpStack {
         var_store.vars.insert(name, val);
     }
 
-    fn access(&mut self, var_store: &mut VarStore, name: String) {
+    fn access(&mut self, var_store: &mut VarStore, lex: &mut Lexer, name: String) {
         match var_store.vars.get(&name) {
-            Some(v) => self.push((*v).clone()),
+            Some(v) => {
+                match lex.peek() {
+                    Some(Op::Glyph(Glyph::Index(i))) => {
+                        match v {
+                            Operand::String(s) => { 
+                                self.push(Operand::String(s.chars().nth(i).unwrap().to_string()));
+                                lex.next();
+                            },
+                            _ => panic!("Can only index Strings!"),
+                        }
+                    }
+                    _ => self.push((*v).clone()),
+                }
+            },
             None => panic!("Variable {} not found!", name),
         }
     }
@@ -348,6 +363,7 @@ impl Lexer {
                 '~' => return Some(Op::Glyph(Glyph::Loop)),
                 '$' => return Some(Op::Glyph(Glyph::Break)),
                 ':' => return Some(Op::Glyph(Glyph::Else)),
+                '[' => return Some(Op::Glyph(Glyph::Index(self.read_index()))),
 
                 //Variable access
                 c if c.is_ascii_alphabetic() => {
@@ -361,6 +377,13 @@ impl Lexer {
         }
     }
 
+    fn peek(&mut self) -> Option<Op> {
+        let old_pos = self.current;
+        let op = self.next();
+        self.current = old_pos;
+        op
+    }
+
     fn read_num(&mut self) -> i32 {
         let mut num = String::new();
         while self.current < self.chars.len() && self.chars[self.current].is_ascii_digit() {
@@ -370,6 +393,22 @@ impl Lexer {
 
         self.current -= 1;
         num.parse().unwrap()
+    }
+
+    fn read_index(&mut self) -> usize {
+        let mut num = String::new();
+        let mut c = self.chars[self.current];
+
+        while self.current < self.chars.len() && c != ']' {
+            num.push(self.chars[self.current]);
+            self.current += 1;
+            c = self.chars[self.current];
+        }
+
+        match num.parse() {
+            Ok(n) => n,
+            Err(_) => panic!("Invalid index!"),
+        }
     }
 
     fn read_str(&mut self) -> String {
@@ -561,6 +600,7 @@ fn main() {
                     lex.seek(Op::Glyph(Glyph::OpenSquiggle), "Missing braces after else!".to_string());
                     lex.exit_body();
                 }
+                Glyph::Index(_) => panic!("Can only index variables!"),
                 _ => (),
             },
             Op::Operand(o) => stack.push(o),
@@ -577,7 +617,7 @@ fn main() {
                 Operator::Cond => stack.cond(&mut lex),
                 Operator::Pop => stack.silent_pop(),
                 Operator::Clear => stack.clear(),
-                Operator::Access(s) => stack.access(&mut var_store, s),
+                Operator::Access(s) => stack.access(&mut var_store, &mut lex, s),
                 Operator::Assign(s) => stack.assign(&mut var_store, s),
                 _ => panic!("WIP"),
             },
