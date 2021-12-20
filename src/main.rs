@@ -564,7 +564,7 @@ impl Lexer {
             }
 
             let c = self.chars[self.current];
-            if c.is_ascii_whitespace() || c == '[' {
+            if c.is_ascii_whitespace() || c == '[' || c == '{' || c =='}' {
                 self.current -= 1;
                 return s;
             }
