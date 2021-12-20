@@ -6,6 +6,7 @@ use std::env;
 use std::fmt;
 use std::io;
 use std::io::Read;
+use std::io::Write;
 
 //Enums - misc
 #[derive(Debug)]
@@ -260,7 +261,8 @@ impl OpStack {
         if self.stack.is_empty() {
             println!("_");
         } else {
-            println!("{}", self.stack[self.stack.len() - 1]);
+            print!("{}", self.stack[self.stack.len() - 1]);
+            io::stdout().flush().unwrap();
         }
     }
 
@@ -291,12 +293,10 @@ impl OpStack {
 
         match self.pop() {
             Operand::String(v) => {
-                self.push(Operand::String(
-                    match v.chars().nth(index as usize) {
-                        Some(c) => c.to_string(),
-                        None => panic!("Index out of bounds!"),
-                    },
-                ));
+                self.push(Operand::String(match v.chars().nth(index as usize) {
+                    Some(c) => c.to_string(),
+                    None => panic!("Index out of bounds!"),
+                }));
             }
             _ => panic!("Can only index Strings!"),
         };
@@ -476,11 +476,29 @@ impl Lexer {
 
     fn read_str(&mut self) -> String {
         let mut str = String::new();
+        let symbol = self.chars[self.current]; //make sure we know which character terminates the string
+
         self.current += 1;
         let mut c = self.chars[self.current];
 
-        while self.current < self.chars.len() - 1 && c != '"' && c != '\'' {
-            str.push(c);
+        while self.current < self.chars.len() - 1 && c != symbol {
+            //Check for escape sequence
+            if c == '\\' {
+                self.current += 1;
+                c = self.chars[self.current];
+                match c {
+                    'n' => str.push('\n'),
+                    't' => str.push('\t'),
+                    '\\' => str.push('\\'),
+                    '"' => str.push('"'),
+                    '\'' => str.push('\''),
+                    '0' => str.push('\0'),
+                    _ => panic!("Unrecognised escape sequence \\{}", c),
+                }
+            } else {
+                str.push(c);
+            }
+
             self.current += 1;
             c = self.chars[self.current];
         }
@@ -584,7 +602,7 @@ impl Lexer {
             self.current += 1;
         }
 
-        println!("");
+        println!();
     }
 }
 
