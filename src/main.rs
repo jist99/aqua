@@ -8,10 +8,11 @@ use std::io::Read;
 enum Brace {
     Open,
     OpenFor(usize),
+    OpenFunc(usize),
 }
 
 //Enums - Op
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 enum Operand {
     Int(i32),
     Bool(bool),
@@ -54,6 +55,7 @@ enum Glyph {
     Loop,
     Break,
     Else,
+    Define,
 }
 
 #[derive(PartialEq)]
@@ -263,17 +265,20 @@ impl OpStack {
         }
 
         let val = self.pop();
-        var_store.vars.insert(name, val);
+        var_store.set_var(name, val);
     }
 
-    fn access(&mut self, var_store: &mut VarStore, lex: &mut Lexer, name: String) {
-        match var_store.vars.get(&name) {
-            Some(v) => self.push((*v).clone()),
-            None => panic!("Variable {} not found!", name),
+    fn access(&mut self, var_store: &mut VarStore, name: &str) -> bool {
+        match var_store.get_var(name) {
+            Some(v) => {
+                self.push(v);
+                true
+            }
+            None => false,
         }
     }
 
-    fn get_index(&mut self, var_store: &mut VarStore) {
+    fn get_index(&mut self) {
         let index = match self.pop() {
             Operand::Int(v) => v,
             _ => panic!("Index must be an Int!"),
@@ -281,8 +286,10 @@ impl OpStack {
 
         match self.pop() {
             Operand::String(v) => {
-                self.push(Operand::String(v.chars().nth(index as usize).unwrap().to_string()));
-            },
+                self.push(Operand::String(
+                    v.chars().nth(index as usize).unwrap().to_string(),
+                ));
+            }
             _ => panic!("Can only index Strings!"),
         };
     }
@@ -290,14 +297,43 @@ impl OpStack {
 
 //Variable storage
 struct VarStore {
-    vars: HashMap<String, Operand>,
+    vars: Vec<HashMap<String, Operand>>,
+    funcs: HashMap<String, usize>,
 }
 
 impl VarStore {
     fn new() -> VarStore {
-        VarStore {
-            vars: HashMap::<String, Operand>::new(),
+        let mut vs = VarStore {
+            vars: Vec::<HashMap<String, Operand>>::new(),
+            funcs: HashMap::<String, usize>::new(),
+        };
+
+        vs.vars.push(HashMap::<String, Operand>::new());
+        vs
+    }
+
+    fn get_var(&self, name: &str) -> Option<Operand> {
+        for i in (0..self.vars.len()).rev() {
+            match self.vars[i].get(name) {
+                Some(v) => return Some((*v).clone()),
+                None => continue,
+            }
         }
+
+        None
+    }
+
+    fn set_var(&mut self, name: String, val: Operand) {
+        let i = self.vars.len() - 1;
+        self.vars[i].insert(name, val);
+    }
+
+    fn new_scope(&mut self) {
+        self.vars.push(HashMap::<String, Operand>::new());
+    }
+
+    fn destroy_scope(&mut self) {
+        self.vars.pop();
     }
 }
 
@@ -317,9 +353,36 @@ impl Lexer {
         l
     }
 
+    //Locate function definitions, and store their positions
+    fn register_functions(&mut self, var_store: &mut VarStore) {
+        loop {
+            self.current += 1;
+            if self.current >= self.chars.len() {
+                break;
+            }
+
+            let c = self.chars[self.current];
+
+            match c {
+                _c if self.is_str("//") => self.comment(),
+                '#' => {
+                    let fn_name = self.read_until_space(1);
+                    self.seek(
+                        Op::Glyph(Glyph::OpenSquiggle),
+                        "Function definition must start with '{'!",
+                    );
+                    var_store.funcs.insert(fn_name, self.current);
+                }
+                _ => (),
+            }
+        }
+        //Reset current, ready for the 2nd pass
+        self.current = 0;
+    }
+
     fn next(&mut self) -> Option<Op> {
         loop {
-            self.current += 1; //TODO: fix so that a space before the program is not needed
+            self.current += 1;
             if self.current >= self.chars.len() {
                 return None;
             }
@@ -342,7 +405,7 @@ impl Lexer {
                 //Operators
                 _c if self.is_str("==") => return Some(Op::Operator(Operator::Equal)),
                 _c if self.is_str("!=") => return Some(Op::Operator(Operator::NotEqual)),
-                _c if self.is_str("[]")  => return Some(Op::Operator(Operator::Index)),
+                _c if self.is_str("[]") => return Some(Op::Operator(Operator::Index)),
                 '<' => return Some(Op::Operator(Operator::LessThan)),
                 '>' => return Some(Op::Operator(Operator::GreaterThan)),
                 '+' => return Some(Op::Operator(Operator::Add)),
@@ -361,6 +424,7 @@ impl Lexer {
                 '~' => return Some(Op::Glyph(Glyph::Loop)),
                 '$' => return Some(Op::Glyph(Glyph::Break)),
                 ':' => return Some(Op::Glyph(Glyph::Else)),
+                '#' => return Some(Op::Glyph(Glyph::Define)),
 
                 //Variable access
                 c if c.is_ascii_alphabetic() => {
@@ -397,7 +461,7 @@ impl Lexer {
         self.current += 1;
         let mut c = self.chars[self.current];
 
-        while self.current < self.chars.len() && c != '"' && c != '\'' {
+        while self.current < self.chars.len() - 1 && c != '"' && c != '\'' {
             str.push(c);
             self.current += 1;
             c = self.chars[self.current];
@@ -406,7 +470,7 @@ impl Lexer {
         str
     }
 
-    fn seek(&mut self, op: Op, err: String) {
+    fn seek(&mut self, op: Op, err: &str) {
         let mut old = self.current;
         loop {
             match self.next() {
@@ -495,6 +559,15 @@ impl Lexer {
             }
         }
     }
+
+    fn context(&mut self) {
+        while self.current < self.chars.len() {
+            print!("{}", self.chars[self.current]);
+            self.current += 1;
+        }
+
+        println!("");
+    }
 }
 
 fn main() {
@@ -513,8 +586,11 @@ fn main() {
     let mut var_store = VarStore::new();
 
     //Sub structures
-    let mut to_open = false;
+    let mut for_open = false;
+    let mut func_open = (false, 0usize);
     let mut loop_stack = Vec::<Brace>::new();
+
+    lex.register_functions(&mut var_store);
 
     'a: loop {
         let op = match lex.next() {
@@ -526,11 +602,14 @@ fn main() {
             //Dealing with loops, ensuring that when the latter bracket of a loop is reached, we actually loop
             //Requires a stack to keep track of which brackets are for what, etc
             Op::Glyph(g) => match g {
-                Glyph::Loop => to_open = true,
+                Glyph::Loop => for_open = true,
                 Glyph::OpenSquiggle => {
-                    if to_open {
+                    if for_open {
                         loop_stack.push(Brace::OpenFor(lex.current));
-                        to_open = false;
+                        for_open = false;
+                    } else if func_open.0 {
+                        loop_stack.push(Brace::OpenFunc(func_open.1));
+                        func_open = (false, 0usize);
                     } else {
                         loop_stack.push(Brace::Open);
                     }
@@ -545,7 +624,15 @@ fn main() {
                             loop_stack.pop();
                         }
                         //If we're closing a loop, loop
-                        Brace::OpenFor(pos) => lex.current = pos,
+                        Brace::OpenFor(pos) => {
+                            lex.current = pos;
+                            loop_stack.pop();
+                        }
+                        Brace::OpenFunc(ret) => {
+                            lex.current = ret;
+                            var_store.destroy_scope();
+                            loop_stack.pop();
+                        }
                         _ => (),
                     };
                 }
@@ -556,9 +643,6 @@ fn main() {
                     for i in (0..loop_stack.len()).rev() {
                         let brace = &mut loop_stack[i];
                         match brace {
-                            Brace::Open => {
-                                loop_stack.pop();
-                            }
                             Brace::OpenFor(pos) => {
                                 //Current should be pos-1 because pos is the bracket,
                                 //so we must go before that for exit_body() to work correctly
@@ -567,6 +651,14 @@ fn main() {
 
                                 found = true;
                                 break;
+                            }
+                            Brace::OpenFunc(ret) => {
+                                lex.current = *ret;
+                                found = true;
+                                break;
+                            }
+                            _ => {
+                                loop_stack.pop();
                             }
                         };
                     }
@@ -579,9 +671,14 @@ fn main() {
                 }
                 //Skip over else's in normal code
                 Glyph::Else => {
+                    lex.seek(Op::Glyph(Glyph::OpenSquiggle), "Missing braces after else!");
+                    lex.exit_body();
+                }
+                //SKip over define's in normal code
+                Glyph::Define => {
                     lex.seek(
                         Op::Glyph(Glyph::OpenSquiggle),
-                        "Missing braces after else!".to_string(),
+                        "Missing braces after define!",
                     );
                     lex.exit_body();
                 }
@@ -601,9 +698,29 @@ fn main() {
                 Operator::Cond => stack.cond(&mut lex),
                 Operator::Pop => stack.silent_pop(),
                 Operator::Clear => stack.clear(),
-                Operator::Access(s) => stack.access(&mut var_store, &mut lex, s),
+                Operator::Access(s) => {
+                    let outcome = stack.access(&mut var_store, &s);
+
+                    if !outcome {
+                        match var_store.funcs.get(&s) {
+                            Some(pos) => {
+                                //lex.read_until_space(0);
+
+                                func_open = (true, lex.current);
+                                lex.current = *pos;
+
+                                var_store.new_scope();
+                            }
+                            None => panic!(
+                                "Unknown variable '{}' on level {}!",
+                                s,
+                                var_store.vars.len()
+                            ),
+                        }
+                    }
+                }
                 Operator::Assign(s) => stack.assign(&mut var_store, s),
-                Operator::Index => stack.get_index(&mut var_store),
+                Operator::Index => stack.get_index(),
                 _ => panic!("WIP"),
             },
         }
