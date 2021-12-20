@@ -4,6 +4,7 @@
 use std::collections::hash_map::HashMap;
 use std::env;
 use std::fmt;
+use std::io;
 use std::io::Read;
 
 //Enums - misc
@@ -49,6 +50,7 @@ enum Operator {
     Assign(String),
     Access(String),
     Index,
+    Input,
 }
 
 #[derive(PartialEq)]
@@ -290,11 +292,23 @@ impl OpStack {
         match self.pop() {
             Operand::String(v) => {
                 self.push(Operand::String(
-                    v.chars().nth(index as usize).unwrap().to_string(),
+                    match v.chars().nth(index as usize) {
+                        Some(c) => c.to_string(),
+                        None => panic!("Index out of bounds!"),
+                    },
                 ));
             }
             _ => panic!("Can only index Strings!"),
         };
+    }
+
+    fn read_input(&mut self) {
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Failed to read line");
+
+        self.push(Operand::String(input));
     }
 }
 
@@ -420,6 +434,7 @@ impl Lexer {
                 ',' => return Some(Op::Operator(Operator::Pop)),
                 ';' => return Some(Op::Operator(Operator::Clear)),
                 '=' => return Some(Op::Operator(Operator::Assign(self.read_until_space(1)))),
+                '_' => return Some(Op::Operator(Operator::Input)),
 
                 //Glyphs
                 '{' => return Some(Op::Glyph(Glyph::OpenSquiggle)),
@@ -629,7 +644,6 @@ fn main() {
                         //If we're closing a loop, loop
                         Brace::OpenFor(pos) => {
                             lex.current = pos;
-                            loop_stack.pop();
                         }
                         Brace::OpenFunc(ret) => {
                             lex.current = ret;
@@ -660,10 +674,10 @@ fn main() {
                                 found = true;
                                 break;
                             }
-                            _ => {
-                                loop_stack.pop();
-                            }
+                            _ => (),
                         };
+
+                        loop_stack.pop();
                     }
 
                     if !found {
@@ -724,6 +738,7 @@ fn main() {
                 }
                 Operator::Assign(s) => stack.assign(&mut var_store, s),
                 Operator::Index => stack.get_index(),
+                Operator::Input => stack.read_input(),
                 _ => panic!("WIP"),
             },
         }
