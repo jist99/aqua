@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unreachable_patterns)]
+
 use std::collections::hash_map::HashMap;
 use std::env;
 use std::fmt;
