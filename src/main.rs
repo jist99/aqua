@@ -114,7 +114,7 @@ impl OpStack {
             },
             Operand::String(v) => match self.pop() {
                 Operand::Int(v2) => {
-                    let si = match v.parse::<i32>() {
+                    let si = match v.trim().parse::<i32>() {
                         Ok(i) => i,
                         Err(_) => panic!("Cannot parse string to int"),
                     };
