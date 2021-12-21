@@ -113,7 +113,14 @@ impl OpStack {
                 _ => panic!("Add only implemented for Int and String"),
             },
             Operand::String(v) => match self.pop() {
-                Operand::Int(v2) => self.push(Operand::String(v2.to_string() + &v)),
+                Operand::Int(v2) => {
+                    let si = match v.parse::<i32>() {
+                        Ok(i) => i,
+                        Err(_) => panic!("Cannot parse string to int"),
+                    };
+
+                    self.push(Operand::Int(si + v2));
+                }
                 Operand::String(v2) => self.push(Operand::String(v2 + &v)),
                 Operand::Bool(v2) => self.push(Operand::String(v2.to_string() + &v)),
                 _ => panic!("Add only implemented for Int and String"),
@@ -564,7 +571,7 @@ impl Lexer {
             }
 
             let c = self.chars[self.current];
-            if c.is_ascii_whitespace() || c == '[' || c == '{' || c =='}' {
+            if c.is_ascii_whitespace() || c == '[' || c == '{' || c == '}' {
                 self.current -= 1;
                 return s;
             }
