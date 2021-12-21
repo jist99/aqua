@@ -419,6 +419,7 @@ impl Lexer {
             match c {
                 //Comment
                 _c if self.is_str("//") => self.comment(),
+                _c if self.is_str("/*") => self.multi_line_comment(),
 
                 //Operands
                 c if c.is_ascii_digit() => return Some(Op::Operand(Operand::Int(self.read_num()))),
@@ -556,6 +557,19 @@ impl Lexer {
 
             let c = self.chars[self.current];
             if c == '\n' {
+                return;
+            }
+            self.current += 1;
+        }
+    }
+
+    fn multi_line_comment(&mut self) {
+        loop {
+            if self.current >= self.chars.len() {
+                return;
+            }
+
+            if self.is_str("*/") {
                 return;
             }
             self.current += 1;
